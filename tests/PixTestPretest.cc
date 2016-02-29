@@ -152,14 +152,16 @@ void PixTestPretest::doTest() {
 
   if (fProblem) {
     bigBanner("ERROR: some ROCs are not programmable; stop"); 
-    return;
+    //return;
   }
+  fProblem = false;
 
   setVana();
   if (fProblem) {
     bigBanner("ERROR: turning off some ROCs lead to less I(ana) current drop than expected;  stop"); 
-    return;
+    //return;
   }
+  fProblem = false;
 
   h1 = (*fDisplayedHist); 
   h1->Draw(getHistOption(h1).c_str());
@@ -178,7 +180,7 @@ void PixTestPretest::doTest() {
 
   if (fProblem) {
     bigBanner("ERROR: No functional timings found;  stop");
-    return;
+    //return;
   }
 
   findWorkingPixel();
@@ -349,6 +351,7 @@ void PixTestPretest::setVana() {
     } // iter
 
     rocIana[roc] = ia-i015; // more or less identical for all ROCS?!
+    if (vana==255 || vana<40) vana = 78;
     vanaStart[roc] = vana; // remember best
     fApi->setDAC( "vana", 0, roc ); // switch off for next ROC
 
