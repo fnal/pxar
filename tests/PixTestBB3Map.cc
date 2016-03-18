@@ -126,7 +126,7 @@ void PixTestBB3Map::doTest() {
   // scurveMaps function is located in pxar/tests/PixTest.cc
   // generate a TH1 s-curve wrt VthrComp for each pixel
   vector<TH1*>  thrmapsCals = scurveMaps("VthrComp", "calSMap", fParNtrig, 0, 149, -1, -1, result, 1, flag);
- 
+
   // create vectors of plots to hold the rescaled thresholds
   vector<TH2D*>  rescaledThrmaps;
   vector<TH1D*>  rescaledThrdists;
@@ -134,6 +134,11 @@ void PixTestBB3Map::doTest() {
   // create vector of pairs of 1D distributions (for odd/even columns)
   vector<pair<TH1D*,TH1D*> > dlist;
 
+  // create a 1D distribution for the entire module,
+  // to extract a global mean turn-on value
+  TH1D* hSum = bookTH1D(Form("dist_thr_calSMap_VthrComp_Sum"), 
+			 Form("VthrComp threshold distribution for entire module"),
+			 256, 0., 256.);
 
   for (unsigned int i = 0; i < thrmapsCals.size(); ++i) {
 
@@ -174,6 +179,8 @@ void PixTestBB3Map::doTest() {
     }
 
     dlist.push_back(std::make_pair(hEven,hOdd));
+    hSum->Add(hEven);
+    hSum->Add(hOdd);
     fHistList.push_back(hEven);
     fHistList.push_back(hOdd);
   }
@@ -194,28 +201,33 @@ void PixTestBB3Map::doTest() {
 
     distEven = (TH1D*)dlist[i].first;
     distOdd  = (TH1D*)dlist[i].second;
+
     distEven->GetXaxis()->SetRangeUser(10.,256.);
     distOdd->GetXaxis()->SetRangeUser(10.,256.);
 
     // search for peaks in the distribution
-    // sigma = 5, threshold = 50%
+    // sigma = 5, threshold = 10%
     // peaks below threshold*max_peak_height are discarded
     // "nobackground" means it doesn't try to subtract a background
     //   from the distribution
-    nPeaksEven = s.Search(distEven, 5, "nobackground", 0.5);
-    nPeaksOdd = s.Search(distOdd, 5, "nobackground", 0.5);
+    nPeaksEven = s.Search(distEven, 5, "nobackground", 0.1);
+    nPeaksOdd = s.Search(distOdd, 5, "nobackground", 0.1);
     distEven->GetXaxis()->UnZoom();
     distOdd->GetXaxis()->UnZoom();
 
-    // use fitPeaks algorithm to get the fitted gaussian of good bumps
-    fitEven = fitPeaks(distEven, s, nPeaksEven);
-    //initial to values that will make no bumps get flagged as bad
+
+    //initialize to values that will make no bumps get flagged as bad
     double meanEven = 255-NSIGMA, sigmaEven = 1, meanOdd = 255-NSIGMA, sigmaOdd = 1;
+
+    // use fitPeaks algorithm to get the fitted gaussian of good bumps
+    fitEven = fitPeaks(distEven, s, nPeaksEven, hSum->GetMean());
     if (fitEven){
       meanEven = fitEven->GetParameter(1);
       sigmaEven = fabs(fitEven->GetParameter(2));
     }
-    fitOdd = fitPeaks(distOdd, s, nPeaksOdd);
+
+    // use fitPeaks algorithm to get the fitted gaussian of good bumps
+    fitOdd = fitPeaks(distOdd, s, nPeaksOdd, hSum->GetMean());
     if (fitOdd){
       meanOdd = fitOdd->GetParameter(1);
       sigmaOdd = fabs(fitOdd->GetParameter(2));
@@ -240,7 +252,7 @@ void PixTestBB3Map::doTest() {
     }
     
     LOG(logDEBUG) << "found " << nPeaksOdd << " peaks in " << distOdd->GetName();
-    if(fitEven){
+    if(fitOdd){
       LOG(logDEBUG) << "  best peak: mean = " << meanOdd << ", RMS = " << sigmaOdd;
       LOG(logDEBUG) << "    cut value = " << cutOdd;
       // draw an arrow on the plot to denote cutOdd
@@ -305,6 +317,7 @@ void PixTestBB3Map::doTest() {
   }
   PixTest::update();
 
+
   int seconds = t.RealTime();
   LOG(logINFO) << "PixTestBB3Map::doTest() done"
 	       << (fNDaqErrors>0? Form(" with %d decoding errors: ", static_cast<int>(fNDaqErrors)):"")
@@ -317,7 +330,7 @@ void PixTestBB3Map::doTest() {
 
 
 // ----------------------------------------------------------------------
-TF1* PixTestBB3Map::fitPeaks(TH1D *h, TSpectrum &s, int npeaks) {
+TF1* PixTestBB3Map::fitPeaks(TH1D *h, TSpectrum &s, int npeaks, double targetmean) {
 
 #if defined ROOT_MAJOR_VER && ROOT_MAJOR_VER > 5
   Double_t *xpeaks = s.GetPositionX();
@@ -326,8 +339,8 @@ TF1* PixTestBB3Map::fitPeaks(TH1D *h, TSpectrum &s, int npeaks) {
 #endif
 
   // this function has been simplified wrt the BB test
-  // we now only use the highest peak to fit
-  double bestHeight = -1;
+  // we now only use the closest peak to the module-wide mean
+  double bestMean = 999;
   TF1* f(0);
   TF1* bestFit(0);
 
@@ -345,19 +358,21 @@ TF1* PixTestBB3Map::fitPeaks(TH1D *h, TSpectrum &s, int npeaks) {
     }
     string name = Form("gauss_%d", p);
     // fit a gaussian to the peak
-    // (using pixels within +-25 DAC of peak)
-    f = new TF1(name.c_str(), "gaus(0)", xp-25., xp+25.);
+    // (using pixels within +-10 DAC of peak)
+    f = new TF1(name.c_str(), "gaus(0)", xp-10., xp+10.);
     int bin = h->GetXaxis()->FindBin(xp);
     double yp = h->GetBinContent(bin);
     // use yp at peak position as guess for height of fit
     // use xp as guess of mean of fit
     // use 2 as guess for width of fit
     f->SetParameters(yp, xp, 2.);
-    h->Fit(f, "Q+");
-    double height = h->GetFunction(name.c_str())->GetParameter(0);
+    f->SetParLimits(2,0,10);
+    h->Fit(f, "BMRQ+");
+    double mean = h->GetFunction(name.c_str())->GetParameter(1);
+
     // save the parameters of the highest peak
-    if (height > bestHeight) {
-      bestHeight = height;
+    if (fabs(mean - targetmean) < bestMean) {
+      bestMean = fabs(mean - targetmean);
       bestFit = f;
     }
   }

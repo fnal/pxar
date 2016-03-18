@@ -16,7 +16,7 @@ public:
   void setToolTips();
 
   void doTest(); 
-  TF1* fitPeaks(TH1D *h, TSpectrum &s, int npeaks);
+  TF1* fitPeaks(TH1D *h, TSpectrum &s, int npeaks, double targetmean);
 
 private:
   int          fParNtrig; 
