@@ -30,6 +30,7 @@ PixTestXray::PixTestXray(PixSetup *a, std::string name) : PixTest(a, name),
   fTree = 0; 
   fPhCal.setPHParameters(fPixSetup->getConfigParameters()->getGainPedestalParameters());
   fPhCalOK = fPhCal.initialized();
+  fevtCnt = -1;
 
 }
 
@@ -280,6 +281,7 @@ void PixTestXray::doPhRun() {
     fHitsVsColumn.clear(); 
     fHitsVsEvtCol.clear();
     fTriggers.clear();
+    fevtCnt = -1;
   }
 
   if (0 == fQ.size()) {
@@ -734,7 +736,6 @@ void PixTestXray::processData(uint16_t numevents) {
   fDirectory->cd();
   PixTest::update();
 
-  static long int evtCnt(-1); 
   int pixCnt(0);
   LOG(logDEBUG) << "Getting Event Buffer";
   vector<pxar::Event> daqdat;
@@ -759,7 +760,7 @@ void PixTestXray::processData(uint16_t numevents) {
   int idx(-1); 
   uint16_t q; 
   for (std::vector<pxar::Event>::iterator it = daqdat.begin(); it != daqdat.end(); ++it) {
-    ++evtCnt;
+    ++fevtCnt;
     pixCnt += it->pixels.size(); 
     
     
@@ -773,9 +774,9 @@ void PixTestXray::processData(uint16_t numevents) {
     for (unsigned int ipix = 0; ipix < it->pixels.size(); ++ipix) {   
       idx = getIdxFromId(it->pixels[ipix].roc());
 
-      fHitsVsEvents[idx]->Fill(evtCnt); 
+      fHitsVsEvents[idx]->Fill(fevtCnt); 
       fHitsVsColumn[idx]->Fill(it->pixels[ipix].column()); 
-      fHitsVsEvtCol[idx]->Fill(evtCnt, it->pixels[ipix].column()); 
+      fHitsVsEvtCol[idx]->Fill(fevtCnt, it->pixels[ipix].column()); 
 
       if (fPhCalOK) {
 	q = fPhCal.vcal(it->pixels[ipix].roc(), 
@@ -804,7 +805,7 @@ void PixTestXray::processData(uint16_t numevents) {
     
     if (fParFillTree) fTree->Fill();
   }
-  
+
   LOG(logDEBUG) << Form(" # events read: %6ld, pixels seen in all events: %3d", daqdat.size(), pixCnt);
   
   fHmap[0]->Draw("colz");

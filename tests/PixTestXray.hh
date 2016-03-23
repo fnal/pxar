@@ -61,6 +61,7 @@ private:
   
   int     fVthrComp;
   long int fEventsMax;
+  long int fevtCnt;
 
   std::vector<std::pair<std::string, uint8_t> > fPg_setup;
 
