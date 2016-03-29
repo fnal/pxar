@@ -289,7 +289,7 @@ void PixTestTiming::PhaseScan() {
         int NFunctionalROCPhases = 0;
         int MaxFunctionalROCArea = 0;
         for (int ithtdelay = 0; ithtdelay < 4; ithtdelay++) {
-          if (ithtdelay==2) continue;
+          if (ithtdelay!=3) continue;
           h3 = bookTH2D(Form("ROCDelayScan_TBMCore_%d_%d_%d",int(itbm),delaysetting/4,ithtdelay),Form("TBM Core: %d ROC Delay Scan: 160MHz Phase = %d 400MHz Phase = %d THT Delay = %d",int(itbm),iclk160,iclk400,ithtdelay), 8, -0.5, 7.5, 8, -0.5, 7.5);
           h3->SetDirectory(fDirectory);
           setTitles(h3, "ROC Port 0 Delay", "ROC Port 1 Delay");
