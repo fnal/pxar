@@ -500,6 +500,8 @@ void PixTestPretest::findTiming() {
   //Reset to FPIX default phases
   tbmSet("basea", 2, 0xD2);
   tbmSet("basee", 0, 0xC8);
+  fApi->daqStart(500000,true);
+  fApi->daqStop(true);
 
 }
 
