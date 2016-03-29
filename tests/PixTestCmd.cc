@@ -3858,9 +3858,6 @@ void PixTestCmd::runCommand(std::string command) {
   if (!command.compare("timing")){
     std::string s_redirect = "timing > pxar_timing.log";
     cmd->exec(s_redirect.c_str());
-    cmd->fApi->daqTriggerSource("pg_direct");
-    cmd->fApi->daqStart(500000,true);
-    cmd->fApi->daqStop(true);
   }
 
   PixTest::update();
