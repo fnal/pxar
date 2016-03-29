@@ -489,7 +489,7 @@ void PixTestTiming::ROCDelayScan() {
   }
 
   for (int ithtdelay = 0; ithtdelay < 4; ithtdelay++) {
-    if (ithtdelay==2) continue;
+    if (ithtdelay!=3) continue;
     h1 = bookTH2D(Form("ROCDelayScan%d",ithtdelay),Form("ROC Delay Scan: THT Delay = %d",ithtdelay), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
     setTitles(h1, "ROC Port 0 Delay", "ROC Port 1 Delay");
