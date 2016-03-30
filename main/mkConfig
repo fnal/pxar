@@ -179,7 +179,7 @@ sub setTbms {
 #	    $tbms .= "basee   0x2c\n";
         $tbms .= "basec   0x00\n";
         if ($opt_f) {
-           $tbms .= "basea   0xD2\n";
+           $tbms .= "basea   0xDB\n";
            $tbms .= "basee   0xC8\n";
         } else {
            $tbms .= "basea   0x49\n";
