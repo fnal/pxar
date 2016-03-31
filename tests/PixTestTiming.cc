@@ -109,13 +109,16 @@ PixTestTiming::~PixTestTiming()
 // ----------------------------------------------------------------------
 void PixTestTiming::doTest() {
 
+  // Start test timer
+  timer t;
+
   fDirectory->cd();
   PixTest::update();
   bigBanner(Form("PixTestTiming::doTest()"));
 
   size_t nTBMs = fApi->_dut->getNTbms();
   for (size_t itbm = 0; itbm<nTBMs; itbm++) fApi->setTbmReg("basea", 219, itbm);
-  
+
   TBMPhaseScan();
   if (fProblem) return;
 
@@ -130,13 +133,13 @@ void PixTestTiming::doTest() {
   if (fProblem) LOG(logINFO) << "Problem with TimingTest! Timings not saved!";
   else saveTbmParameters();
 
+  LOG(logINFO) << "PixTestTiming::doTest took " << t << " ms.";
   LOG(logINFO) << "PixTestTiming::doTest() done";
   dutCalibrateOff();
 }
 
 //------------------------------------------------------------------------------
 void PixTestTiming::ClkSdaScan() {
-
 
   // Start test timer
   timer t;
@@ -448,6 +451,7 @@ void PixTestTiming::TBMPhaseScan() {
     }
     if (fNoTokenPass) break;
   }
+  restoreTBMDacs();
 
   //Draw the plots
   for (size_t itbm=0; itbm<tbmhists.size(); itbm++) {
@@ -556,6 +560,7 @@ void PixTestTiming::ROCDelayScan() {
     }
     rocdelayhists.push_back(h1);
   }
+  restoreTBMDacs();
 
   //Draw plots
   TH2D* bestdelayhist = rocdelayhists[0];
@@ -588,7 +593,6 @@ void PixTestTiming::ROCDelayScan() {
   DelayMarker->SetMarkerSize(4);
   bestdelayhist->GetListOfFunctions()->Add(DelayMarker);
   bestdelayhist->Draw("colz");
-  fHistList.push_back(bestdelayhist);
   fHistOptions.insert(make_pair(bestdelayhist, "colz"));
   fDisplayedHist = find(fHistList.begin(), fHistList.end(), bestdelayhist);
   PixTest::update();
@@ -750,22 +754,27 @@ pair <int, int> PixTestTiming::getGoodRegion(TH2D* hist, int hits) {
   if (hist->GetEntries()==0) return make_pair(0,0);
 
   int MaxGoodRegionSize=0;
+  int MaxGoodRegionArea=0;
   int GoodROCDelay=0;
   for (int startbinx=1; startbinx<=hist->GetNbinsX(); startbinx++) {
     for (int startbiny=1; startbiny<=hist->GetNbinsY(); startbiny++) {
       if (int(hist->GetBinContent(startbinx,startbiny))!=hits) continue;
-      for (int regionsize=0; regionsize<8; regionsize++) {
-        bool regiongood = true;
-        for (int xoffset=0; xoffset<=regionsize && regiongood; xoffset++) {
-          for (int yoffset=0; yoffset<=regionsize && regiongood; yoffset++) {
-            int checkbinx = (startbinx+xoffset>8) ? startbinx+xoffset-8 : startbinx+xoffset;
-            int checkbiny = (startbiny+yoffset>8) ? startbiny+yoffset-8 : startbiny+yoffset;
-            if (int(hist->GetBinContent(checkbinx,checkbiny))!=hits) regiongood=false;
+      for (int xsize=0; xsize<8; xsize++) {
+        for (int ysize=0; ysize<8; ysize++) {
+          bool regiongood = true;
+          for (int xoffset=0; xoffset<=xsize && regiongood; xoffset++) {
+            for (int yoffset=0; yoffset<=ysize && regiongood; yoffset++) {
+              int checkbinx = (startbinx+xoffset>8) ? startbinx+xoffset-8 : startbinx+xoffset;
+              int checkbiny = (startbiny+yoffset>8) ? startbiny+yoffset-8 : startbiny+yoffset;
+              if (int(hist->GetBinContent(checkbinx,checkbiny))!=hits) regiongood=false;
+            }
           }
-        }
-        if (regiongood && regionsize+1>MaxGoodRegionSize) {
-          MaxGoodRegionSize=regionsize+1;
-          GoodROCDelay = (startbinx-1+regionsize/2)%8 | (startbiny-1+regionsize/2)%8<<3;
+          if (regiongood && (xsize+1)*(ysize+1)>MaxGoodRegionArea) {
+            MaxGoodRegionArea = (xsize+1)*(ysize+1);
+            if (xsize >= ysize) MaxGoodRegionSize=ysize+1;
+            else if (xsize < ysize) MaxGoodRegionSize=xsize+1;
+            GoodROCDelay = (startbinx-1+xsize/2)%8 | (startbiny-1+ysize/2)%8<<3;
+          }
         }
       }
     }
