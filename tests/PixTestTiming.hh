@@ -32,6 +32,7 @@ private:
     int     fTrigBuffer;
     bool    fNoTokenPass;
     bool    fIgnoreReadBack;
+    bool    fProblem;
 
 	ClassDef(PixTestTiming, 1)
 

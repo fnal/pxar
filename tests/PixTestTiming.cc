@@ -28,6 +28,7 @@ PixTestTiming::PixTestTiming(PixSetup *a, std::string name) : PixTest(a, name)
   PixTest::init();
   init();
   fTrigBuffer=3;
+  fProblem=false;
 }
 
 //------------------------------------------------------------------------------
@@ -112,12 +113,22 @@ void PixTestTiming::doTest() {
   PixTest::update();
   bigBanner(Form("PixTestTiming::doTest()"));
 
-  ClkSdaScan();
-  TH1 *h1 = (*fDisplayedHist);
-  h1->Draw(getHistOption(h1).c_str());
-  PixTest::update();
+  size_t nTBMs = fApi->_dut->getNTbms();
+  for (size_t itbm = 0; itbm<nTBMs; itbm++) fApi->setTbmReg("basea", 219, itbm);
+  
+  TBMPhaseScan();
+  if (fProblem) return;
 
+  ROCDelayScan();
+  if (fProblem) return;
+
+  int fNTrigcopy = fNTrig;
+  fNTrig = 10000000;
   TimingTest();
+  fNTrig = fNTrigcopy;
+
+  if (fProblem) LOG(logINFO) << "Problem with TimingTest! Timings not saved!";
+  else saveTbmParameters();
 
   LOG(logINFO) << "PixTestTiming::doTest() done";
   dutCalibrateOff();
@@ -256,12 +267,12 @@ void PixTestTiming::PhaseScan() {
     NTimings = 0;
     h1 = bookTH2D(Form("TBMPhaseScan_%d",int(itbm)),Form("Phase Scan for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
-    setTitles(h1, "160MHz Phase", "400 MHz Phase");
+    setTitles(h1, "400MHz Phase", "160 MHz Phase");
     h1->SetMinimum(0);
     tbmhists.push_back(h1);
     h2 = bookTH2D(Form("TBMGoodArea_%d",int(itbm)),Form("Functional Roc Delay Area for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h2->SetDirectory(fDirectory);
-    setTitles(h2, "160MHz Phase", "400 MHz Phase");
+    setTitles(h2, "400MHz Phase", "160 MHz Phase");
     h2->SetMinimum(0);
     goodareahists.push_back(h2);
     NFunctionalTimings.push_back(0);
@@ -326,8 +337,8 @@ void PixTestTiming::PhaseScan() {
         }
         if (NFunctionalROCPhases>0) {
           NFunctionalTBMPhases[itbm]++;
-          h1->Fill(iclk160,iclk400,NFunctionalROCPhases);
-          h2->Fill(iclk160,iclk400,MaxFunctionalROCArea);
+          h1->Fill(iclk400,iclk160,NFunctionalROCPhases);
+          h2->Fill(iclk400,iclk160,MaxFunctionalROCArea);
         }
       }
     }
@@ -345,8 +356,6 @@ void PixTestTiming::PhaseScan() {
     tbmhists[itbm]->Draw("colz");
     fHistList.push_back(tbmhists[itbm]);
     fHistOptions.insert(make_pair(tbmhists[itbm], "colz"));
-    fDisplayedHist = find(fHistList.begin(), fHistList.end(), tbmhists[itbm]);
-    PixTest::update();
     goodareahists[itbm]->Draw("colz");
     fHistList.push_back(goodareahists[itbm]);
     fHistOptions.insert(make_pair(goodareahists[itbm], "colz"));
@@ -393,12 +402,13 @@ void PixTestTiming::TBMPhaseScan() {
 
   //Make histograms
   TH2D *h1(0);
+  TH2D *h2(0);
   vector<TH2D*> tbmhists;
 
   for (size_t itbm = 0; itbm<nTBMs; itbm++) {
     h1 = bookTH2D(Form("TBMPhaseScan_%d",int(itbm)),Form("Phase Scan for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
-    setTitles(h1, "160MHz Phase", "400 MHz Phase");
+    setTitles(h1, "400MHz Phase", "160MHz Phase");
     h1->SetMinimum(0);
     tbmhists.push_back(h1);
     if (fNoTokenPass) {
@@ -430,7 +440,7 @@ void PixTestTiming::TBMPhaseScan() {
           statistics results = getEvents(fNTrig, period, fTrigBuffer);
           int NEvents = (results.info_events_empty()+results.info_events_valid())/nTokenChains;
           int NErrors = results.errors_tbm_header() + results.errors_tbm_trailer() + results.errors_roc_missing();
-          if (NEvents==fNTrig && NErrors==0) h1->Fill(iclk160,iclk400);
+          if (NEvents==fNTrig && NErrors==0) h1->Fill(iclk400,iclk160);
         }
         Log::ReportingLevel() = UserReportingLevel;
         fApi->daqStop();
@@ -444,12 +454,42 @@ void PixTestTiming::TBMPhaseScan() {
     tbmhists[itbm]->Draw("colz");
     fHistList.push_back(tbmhists[itbm]);
     fHistOptions.insert(make_pair(tbmhists[itbm], "colz"));
-    fDisplayedHist = find(fHistList.begin(), fHistList.end(), tbmhists[itbm]);
     PixTest::update();
   }
 
-  restoreTBMDacs();
+  h2 = bookTH2D("CombinedTBMPhaseScan","Combined TBM Phase Scan", 8, -0.5, 7.5, 8, -0.5, 7.5);
+  h2->SetDirectory(fDirectory);
+  setTitles(h2, "400MHz Phase", "160MHz Phase");
+  h2->SetMinimum(0);
+  for (size_t itbm=0; itbm<nTBMs; itbm++) h2->Add(tbmhists[itbm]);
 
+  if (h2->GetEntries()==0) {
+    LOG(logERROR) << "TBM Phase Scan Plot Empty. No working TBM Phases found!";
+    fProblem = true;
+    return;
+  }
+
+  int nhits = (int) nTBMs;
+  if (fNoTokenPass) nhits = 1;
+  pair <int, int> TBMInfo = getGoodRegion(h2, nhits);
+  int TBMPhaseSettings = TBMInfo.second<<2;
+  int TBMPhaseArea = TBMInfo.first;
+  LOG(logINFO) << "TBM Phase Settings: " << TBMPhaseSettings;
+  LOG(logINFO) << "400MHz Phase: " << ((TBMPhaseSettings>>2)&7);
+  LOG(logINFO) << "160MHz Phase: " << (TBMPhaseSettings>>5);
+  LOG(logINFO) << "Functional Phase Area: " << TBMPhaseArea;
+  fApi->setTbmReg("basee", TBMPhaseSettings, 0);
+
+  TMarker *PhaseMarker = new TMarker((TBMPhaseSettings>>2)&7, TBMPhaseSettings>>5, 5);
+  PhaseMarker->SetMarkerColor(kBlack);
+  PhaseMarker->SetMarkerSize(4);
+  h2->GetListOfFunctions()->Add(PhaseMarker);
+  h2->Draw("colz");
+  fHistList.push_back(h2);
+  fHistOptions.insert(make_pair(h2, "colz"));
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), h2);
+  PixTest::update();
+  
   // Print timer value:
   LOG(logINFO) << "Test took " << t << " ms.";
   LOG(logINFO) << "PixTestTiming::TBMPhaseScan() done.";
@@ -496,11 +536,11 @@ void PixTestTiming::ROCDelayScan() {
     fHistOptions.insert(make_pair(h1, "colz"));
     h1->SetMinimum(0);
     for (int irocphaseport1 = 0; irocphaseport1 < 8; irocphaseport1++) {
-      fApi->daqStart();
       for (int irocphaseport0 = 0; irocphaseport0 < 8; irocphaseport0++) {
         int ROCDelay = (ithtdelay << 6) | (irocphaseport1 << 3) | irocphaseport0;
         LOG(logDEBUG) << "Token Header/Trailer Delay: " << bitset<2>(ithtdelay).to_string() << " ROC Port1: " << irocphaseport1 << " ROC Port0: " << irocphaseport0 << " ROCDelay Setting: " << bitset<8>(ROCDelay).to_string();
         for (size_t itbm = 0; itbm<nTBMs; itbm++) fApi->setTbmReg("basea", ROCDelay, itbm);
+        fApi->daqStart();
         Log::ReportingLevel() = Log::FromString("QUIET");
         bool goodreadback = true;
         if (!fNoTokenPass && !fIgnoreReadBack) goodreadback = checkReadBackBits(period);
@@ -511,22 +551,47 @@ void PixTestTiming::ROCDelayScan() {
           if (NEvents==fNTrig && NErrors==0) h1->Fill(irocphaseport0,irocphaseport1);
         }
         Log::ReportingLevel() = UserReportingLevel;
+        fApi->daqStop();
       }
-      fApi->daqStop();
     }
     rocdelayhists.push_back(h1);
   }
 
   //Draw plots
+  TH2D* bestdelayhist = rocdelayhists[0];
   for (size_t ihist = 0; ihist < rocdelayhists.size(); ihist++) {
     h1 = rocdelayhists[ihist];
     h1->Draw("colz");
     fHistList.push_back(h1);
-    fDisplayedHist = find(fHistList.begin(), fHistList.end(), h1);
+    if (rocdelayhists[ihist]->GetEntries() > bestdelayhist->GetEntries()) bestdelayhist = rocdelayhists[ihist];
     PixTest::update();
   }
 
-  restoreTBMDacs();
+  if (bestdelayhist->GetEntries()==0) {
+    LOG(logERROR) << "ROC Delay Scan Plot Empty. No working ROC delays found!";
+    fProblem = true;
+    return;
+  }
+  
+  pair <int,int> ROCInfo = getGoodRegion((TH2D*) bestdelayhist,1);
+  int ROCSettings = ROCInfo.second | 192;
+  int ROCArea = ROCInfo.first;
+  LOG(logINFO) << "ROC Delay Settings: " << ROCSettings;
+  LOG(logINFO) << "ROC Header-Trailer/Token Delay: " << bitset<2>(ROCSettings>>6).to_string();
+  LOG(logINFO) << "ROC Port 0 Delay: " << (ROCSettings&7);
+  LOG(logINFO) << "ROC Port 1 Delay: " << ((ROCSettings>>3)&7);
+  LOG(logINFO) << "Functional ROC Area: " << ROCArea;
+  for (size_t itbm = 0; itbm<nTBMs; itbm++) fApi->setTbmReg("basea", ROCSettings, itbm);
+
+  TMarker *DelayMarker = new TMarker(ROCSettings&7, (ROCSettings>>3)&7, 5);
+  DelayMarker->SetMarkerColor(kBlack);
+  DelayMarker->SetMarkerSize(4);
+  bestdelayhist->GetListOfFunctions()->Add(DelayMarker);
+  bestdelayhist->Draw("colz");
+  fHistList.push_back(bestdelayhist);
+  fHistOptions.insert(make_pair(bestdelayhist, "colz"));
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), bestdelayhist);
+  PixTest::update();
 
   // Print timer value:
   LOG(logINFO) << "Test took " << t << " ms.";
@@ -573,7 +638,10 @@ void PixTestTiming::TimingTest() {
   banner(Form("The fraction of properly decoded events is %4.2f%%: %d/%d", float(NEvents)/fNTrig*100, NEvents, fNTrig));
   if (!fIgnoreReadBack) banner(Form("Read back bit status: %d",goodreadback));
   if (NEvents==fNTrig && results.errors()==0 && goodreadback) banner("Timings are good!");
-  else banner("Timings are not good :(", logERROR);
+  else {
+    banner("Timings are not good :(", logERROR);
+    fProblem = true;
+  }
   LOG(logINFO) << "Test took " << t << " ms.";
   LOG(logINFO) << "PixTestTiming::TimingTest() done.";
 
