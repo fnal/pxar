@@ -168,20 +168,20 @@ void PixTestPretest::doTest() {
   PixTest::update(); 
 
   string tbmtype = fApi->_dut->getTbmType(); //"tbm09c"
-  if ((tbmtype == "tbm09c") || (tbmtype == "tbm08c")) {
-    findTiming();
-  } else if (tbmtype == "tbm08b" || tbmtype == "tbm08a") {
-    setTimings();
-  } else if (tbmtype == "tbm08") {
-    LOG(logWARNING) << "tbm08 does not have programable phase settings";
-  } else {
-    LOG(logWARNING) << "No timing test implemented for " <<  tbmtype << "! Do something on your own.";
-  }
+  // if ((tbmtype == "tbm09c") || (tbmtype == "tbm08c")) {
+  //   findTiming();
+  // } else if (tbmtype == "tbm08b" || tbmtype == "tbm08a") {
+  //   setTimings();
+  // } else if (tbmtype == "tbm08") {
+  //   LOG(logWARNING) << "tbm08 does not have programable phase settings";
+  // } else {
+  //   LOG(logWARNING) << "No timing test implemented for " <<  tbmtype << "! Do something on your own.";
+  // }
 
-  if (fProblem) {
-    bigBanner("ERROR: No functional timings found;  stop");
-    //return;
-  }
+  // if (fProblem) {
+  //   bigBanner("ERROR: No functional timings found;  stop");
+  //   //return;
+  // }
 
   findWorkingPixel();
   h1 = (*fDisplayedHist); 
@@ -497,11 +497,6 @@ void PixTestPretest::findTiming() {
     }
   }
   tbmSet("base4", 2, 0x80); // reset once after changing phases
-  //Reset to FPIX default phases
-  tbmSet("basea", 2, 0xDB);
-  tbmSet("basee", 0, 0xC8);
-  fApi->daqStart(500000,true);
-  fApi->daqStop(true);
 
 }
 
