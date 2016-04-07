@@ -402,6 +402,7 @@ void PixTestTiming::TBMPhaseScan() {
   uint16_t period = 200;
   vector<rawEvent> daqRawEv;
   vector<Event> daqEv;
+  uint8_t ROCDelay = GetTBMSetting("basea",0);
 
   //Make histograms
   TH2D *h1(0);
@@ -409,7 +410,7 @@ void PixTestTiming::TBMPhaseScan() {
   vector<TH2D*> tbmhists;
 
   for (size_t itbm = 0; itbm<nTBMs; itbm++) {
-    h1 = bookTH2D(Form("TBMPhaseScan_%d",int(itbm)),Form("Phase Scan for TBM Core %d",int(itbm)), 8, -0.5, 7.5, 8, -0.5, 7.5);
+    h1 = bookTH2D(Form("TBMPhaseScan_%d",int(itbm)),Form("Phase Scan for TBM Core %d with ROCDelay %s",int(itbm),bitset<8>(ROCDelay).to_string().c_str()), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
     setTitles(h1, "400MHz Phase", "160MHz Phase");
     h1->SetMinimum(0);
@@ -461,7 +462,7 @@ void PixTestTiming::TBMPhaseScan() {
     PixTest::update();
   }
 
-  h2 = bookTH2D("CombinedTBMPhaseScan","Combined TBM Phase Scan", 8, -0.5, 7.5, 8, -0.5, 7.5);
+  h2 = bookTH2D("CombinedTBMPhaseScan",Form("Combined TBM Phase Scan with ROCDelay %s",bitset<8>(ROCDelay).to_string().c_str()), 8, -0.5, 7.5, 8, -0.5, 7.5);
   h2->SetDirectory(fDirectory);
   setTitles(h2, "400MHz Phase", "160MHz Phase");
   h2->SetMinimum(0);
@@ -520,6 +521,7 @@ void PixTestTiming::ROCDelayScan() {
   uint16_t period = 200;
   vector<rawEvent> daqRawEv;
   vector<Event> daqEv;
+  uint8_t TBMPhase = GetTBMSetting("basee",0);
 
   //Make histograms
   TH2D *h1(0);
@@ -534,7 +536,7 @@ void PixTestTiming::ROCDelayScan() {
 
   for (int ithtdelay = 0; ithtdelay < 4; ithtdelay++) {
     if (ithtdelay!=3) continue;
-    h1 = bookTH2D(Form("ROCDelayScan%d",ithtdelay),Form("ROC Delay Scan: THT Delay = %d",ithtdelay), 8, -0.5, 7.5, 8, -0.5, 7.5);
+    h1 = bookTH2D(Form("ROCDelayScan%d",ithtdelay),Form("ROC Delay Scan: THT Delay = %d TBMPhase = %s",ithtdelay,bitset<8>(TBMPhase).to_string().c_str()), 8, -0.5, 7.5, 8, -0.5, 7.5);
     h1->SetDirectory(fDirectory);
     setTitles(h1, "ROC Port 0 Delay", "ROC Port 1 Delay");
     fHistOptions.insert(make_pair(h1, "colz"));
@@ -579,7 +581,8 @@ void PixTestTiming::ROCDelayScan() {
   }
   
   pair <int,int> ROCInfo = getGoodRegion((TH2D*) bestdelayhist,1);
-  int ROCSettings = ROCInfo.second | 192;
+  int THTSetting = (bestdelayhist->GetName()[12]-'0')<<6;
+  int ROCSettings = ROCInfo.second | THTSetting;
   int ROCArea = ROCInfo.first;
   LOG(logINFO) << "ROC Delay Settings: " << ROCSettings;
   LOG(logINFO) << "ROC Header-Trailer/Token Delay: " << bitset<2>(ROCSettings>>6).to_string();
