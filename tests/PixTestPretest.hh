@@ -16,6 +16,7 @@ public:
 
   void doTest();
   void setVana();
+  void checkIdig();
   void programROC();
   /// Doug's timing setting
   void setTimings();

@@ -543,6 +543,7 @@ sub printTestParameters {
     print FH <<"EOF";
 -- Pretest
 programroc          button
+checkIdig           button
 targetIa            24
 setVana             button
 iterations          100

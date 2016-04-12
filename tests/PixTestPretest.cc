@@ -156,6 +156,8 @@ void PixTestPretest::doTest() {
   }
   fProblem = false;
 
+  checkIdig();
+
   setVana();
   if (fProblem) {
     bigBanner("ERROR: turning off some ROCs lead to less I(ana) current drop than expected;  stop"); 
@@ -165,7 +167,7 @@ void PixTestPretest::doTest() {
 
   h1 = (*fDisplayedHist); 
   h1->Draw(getHistOption(h1).c_str());
-  PixTest::update(); 
+  PixTest::update();
 
   string tbmtype = fApi->_dut->getTbmType(); //"tbm09c"
   // if ((tbmtype == "tbm09c") || (tbmtype == "tbm08c")) {
@@ -221,6 +223,10 @@ void PixTestPretest::runCommand(std::string command) {
   }
   if (!command.compare("setvana")) {
     setVana(); 
+    return;
+  }
+  if (!command.compare("checkidig")) {
+    checkIdig();
     return;
   }
   if (!command.compare("settimings")) {
@@ -442,6 +448,59 @@ void PixTestPretest::setVana() {
 
 
   dutCalibrateOff();
+}
+
+// ----------------------------------------------------------------------
+void PixTestPretest::checkIdig() {
+
+  // Start test timer
+  timer t;
+
+  cacheDacs();
+  fDirectory->cd();
+  PixTest::update();
+  banner("PixTestPretest::checkIdig() ");
+
+  fApi->_dut->testAllPixels(false);
+  fApi->_dut->maskAllPixels(true);
+
+  string idigString("");
+  int nRocs = fApi->_dut->getNRocs();
+
+  TH1D *h1 = bookTH1D("Idig", "Idig per ROC", nRocs, 0., nRocs);
+  setTitles(h1, "ROC", "Idig [mA]");
+  h1->SetMinimum(0);
+  h1->SetStats(0);
+  fHistList.push_back(h1);
+
+  for (int iroc = 0; iroc < nRocs; ++iroc) fApi->setDAC("vdig", 0, iroc);
+  pxar::mDelay(1000);
+  double initialIdig = fApi->getTBid()*1E3;
+
+  for (int iroc = 0; iroc < nRocs; ++iroc) {
+    fApi->setDAC("vdig", 15, iroc);
+    pxar::mDelay(1000);
+    double Idig = fApi->getTBid()*1E3-initialIdig;
+    idigString += Form("%3.1f ", Idig);
+    h1->Fill(iroc, Idig);
+    fApi->setDAC("vdig", 0, iroc);
+    LOG(logDEBUG) << "Idig for ROC" << iroc << ": " << Idig << " mA";
+    pxar::mDelay(1000);
+    initialIdig = fApi->getTBid()*1E3;
+  }
+
+  h1 = (TH1D*)(fHistList.back());
+  h1->Draw(getHistOption(h1).c_str());
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), h1);
+  PixTest::update();
+  
+  LOG(logINFO) << "Idig [mA/ROC]: " << idigString;
+  LOG(logINFO) << "Test took " << t << " ms.";
+  LOG(logINFO) << "PixTestPretest::checkIdig() done.";
+  
+  restoreDacs();
+  dutCalibrateOff();
+  
 }
 
 // ----------------------------------------------------------------------
