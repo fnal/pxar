@@ -478,14 +478,14 @@ void PixTestPretest::checkIdig() {
   double initialIdig = fApi->getTBid()*1E3;
 
   for (int iroc = 0; iroc < nRocs; ++iroc) {
-    fApi->setDAC("vdig", 15, iroc);
-    pxar::mDelay(1000);
+    fApi->setDAC("vdig", 6, iroc);
+    pxar::mDelay(250);
     double Idig = fApi->getTBid()*1E3-initialIdig;
     idigString += Form("%3.1f ", Idig);
     h1->Fill(iroc, Idig);
     fApi->setDAC("vdig", 0, iroc);
     LOG(logDEBUG) << "Idig for ROC" << iroc << ": " << Idig << " mA";
-    pxar::mDelay(1000);
+    pxar::mDelay(250);
     initialIdig = fApi->getTBid()*1E3;
   }
 
