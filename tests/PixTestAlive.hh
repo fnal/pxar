@@ -23,7 +23,8 @@ public:
 private:
 
   uint16_t fParNtrig; 
-  int      fParVcal; 
+  int      fParVcal;
+  int      fParPHmap;
 
   ClassDef(PixTestAlive, 1)
 

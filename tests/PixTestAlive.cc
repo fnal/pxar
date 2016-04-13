@@ -15,7 +15,7 @@ using namespace pxar;
 ClassImp(PixTestAlive)
 
 // ----------------------------------------------------------------------
-PixTestAlive::PixTestAlive(PixSetup *a, std::string name) : PixTest(a, name), fParNtrig(1), fParVcal(200) {
+PixTestAlive::PixTestAlive(PixSetup *a, std::string name) : PixTest(a, name), fParNtrig(1), fParVcal(200), fParPHmap(0) {
   PixTest::init();
   init(); 
   LOG(logDEBUG) << "PixTestAlive ctor(PixSetup &a, string, TGTab *)";
@@ -41,6 +41,12 @@ bool PixTestAlive::setParameter(string parName, string sval) {
       if (!parName.compare("vcal")) {
 	fParVcal = atoi(sval.c_str()); 
 	setToolTips();
+      }
+      if (!parName.compare("phmap")) {
+        PixUtil::replaceAll(sval, "checkbox(", "");
+        PixUtil::replaceAll(sval, ")", "");
+        fParPHmap = atoi(sval.c_str());
+        setToolTips();
       }
       break;
     }
@@ -145,23 +151,27 @@ void PixTestAlive::aliveTest() {
   maskPixels();
 
   fNDaqErrors = 0; 
-  vector<TH2D*> test2 = efficiencyMaps("PixelAlive", fParNtrig, FLAG_FORCE_MASKED); 
-  vector<int> deadPixel(test2.size(), 0); 
-  vector<int> probPixel(test2.size(), 0); 
-  for (unsigned int i = 0; i < test2.size(); ++i) {
-    // -- count dead pixels
-    for (int ix = 0; ix < test2[i]->GetNbinsX(); ++ix) {
-      for (int iy = 0; iy < test2[i]->GetNbinsY(); ++iy) {
-	if (test2[i]->GetBinContent(ix+1, iy+1) < fParNtrig) {
-	  ++probPixel[i];
-	  if (test2[i]->GetBinContent(ix+1, iy+1) < 1) {
-	    ++deadPixel[i];
-	  }
-	}
+  vector<TH2D*> test2;
+  if (!fParPHmap) test2 = efficiencyMaps("PixelAlive", fParNtrig, FLAG_FORCE_MASKED);
+  else test2 = phMaps("PulseHeightMap", fParNtrig, FLAG_FORCE_MASKED);
+
+  vector<int> deadPixel(test2.size(), 0);
+  vector<int> probPixel(test2.size(), 0);
+  if (!fParPHmap) {
+    for (unsigned int i = 0; i < test2.size(); ++i) {
+      // -- count dead pixels
+      for (int ix = 0; ix < test2[i]->GetNbinsX(); ++ix) {
+        for (int iy = 0; iy < test2[i]->GetNbinsY(); ++iy) {
+          if (test2[i]->GetBinContent(ix+1, iy+1) < fParNtrig) {
+            ++probPixel[i];
+            if (test2[i]->GetBinContent(ix+1, iy+1) < 1) {
+              ++deadPixel[i];
+            }
+          }
+        }
       }
     }
   }
-
   copy(test2.begin(), test2.end(), back_inserter(fHistList));
   
   TH2D *h = (TH2D*)(fHistList.back());
@@ -177,16 +187,18 @@ void PixTestAlive::aliveTest() {
   restoreDacs();
 
   // -- summary printout
-  string deadPixelString, probPixelString; 
-  for (unsigned int i = 0; i < probPixel.size(); ++i) {
-    probPixelString += Form(" %4d", probPixel[i]); 
-    deadPixelString += Form(" %4d", deadPixel[i]); 
+  string deadPixelString, probPixelString;
+  if (!fParPHmap) {
+    for (unsigned int i = 0; i < probPixel.size(); ++i) {
+      probPixelString += Form(" %4d", probPixel[i]); 
+      deadPixelString += Form(" %4d", deadPixel[i]); 
+    }
+    LOG(logINFO) << "PixTestAlive::aliveTest() done" 
+                 << (fNDaqErrors>0? Form(" with %d decoding errors", static_cast<int>(fNDaqErrors)):"");
+    LOG(logINFO) << "number of dead pixels (per ROC): " << deadPixelString;
+    LOG(logDEBUG) << "number of red-efficiency pixels: " << probPixelString;
   }
-  LOG(logINFO) << "PixTestAlive::aliveTest() done" 
-	       << (fNDaqErrors>0? Form(" with %d decoding errors", static_cast<int>(fNDaqErrors)):"");
-  LOG(logINFO) << "number of dead pixels (per ROC): " << deadPixelString;
-  LOG(logDEBUG) << "number of red-efficiency pixels: " << probPixelString;
-
+  
   dutCalibrateOff();  
 }
 
