@@ -2489,8 +2489,6 @@ bool PixTest::checkReadBackBits(uint16_t period) {
   std::vector<tbmConfig> enabledTBMs = fApi->_dut->getEnabledTbms();
   for(std::vector<tbmConfig>::iterator enabledTBM = enabledTBMs.begin(); enabledTBM != enabledTBMs.end(); enabledTBM++) nTokenChains += enabledTBM->tokenchains.size();
 
-  for (int index=0; index < (int) rocids.size(); index++) { LOG(logDEBUG) << "index: " << index << " rocids: " << (int) rocids[index]; }
-
   for (size_t itbm=0; itbm < nTBMs; itbm++) {
     if ((GetTBMSetting("base0", itbm) & 64) == 64) {
       for (int iroc=0; iroc < (int) rocids.size(); iroc++) {
@@ -2501,8 +2499,6 @@ bool PixTest::checkReadBackBits(uint16_t period) {
       }
     }
   }
-  
-  for (int index=0; index < (int) rocids.size(); index++) { LOG(logDEBUG) << "index: " << index << " rocids: " << (int) rocids[index]; }
   
   fApi->daqTrigger(32, period);
   try { daqEv = fApi->daqGetEventBuffer(); }
