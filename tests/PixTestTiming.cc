@@ -415,7 +415,6 @@ void PixTestTiming::TBMPhaseScan() {
     setTitles(h1, "400MHz Phase", "160MHz Phase");
     h1->SetMinimum(0);
     tbmhists.push_back(h1);
-    LOG(logDEBUG) << "fNoTokenPass: " << fNoTokenPass;
     if (fNoTokenPass) {
       for (size_t itbm = 0; itbm<nTBMs; itbm++) {
         uint8_t NewTBMSettingBase0 = GetTBMSetting("base0", itbm) | 64;
