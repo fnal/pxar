@@ -29,6 +29,8 @@ PixTestTiming::PixTestTiming(PixSetup *a, std::string name) : PixTest(a, name)
   init();
   fTrigBuffer=3;
   fProblem=false;
+  fNoTokenPass = false;
+  fIgnoreReadBack = false;
 }
 
 //------------------------------------------------------------------------------
@@ -37,8 +39,6 @@ PixTestTiming::PixTestTiming() : PixTest() {}
 bool PixTestTiming::setParameter(string parName, string sval) {
   bool found(false);
   std::transform(parName.begin(), parName.end(), parName.begin(), ::tolower);
-  fNoTokenPass = false;
-  fIgnoreReadBack = false;
   for (unsigned int i = 0; i < fParameters.size(); ++i) {
     if (fParameters[i].first == parName) {
       found = true;
@@ -415,6 +415,7 @@ void PixTestTiming::TBMPhaseScan() {
     setTitles(h1, "400MHz Phase", "160MHz Phase");
     h1->SetMinimum(0);
     tbmhists.push_back(h1);
+    LOG(logDEBUG) << "fNoTokenPass: " << fNoTokenPass;
     if (fNoTokenPass) {
       for (size_t itbm = 0; itbm<nTBMs; itbm++) {
         uint8_t NewTBMSettingBase0 = GetTBMSetting("base0", itbm) | 64;
@@ -466,7 +467,8 @@ void PixTestTiming::TBMPhaseScan() {
   h2->SetDirectory(fDirectory);
   setTitles(h2, "400MHz Phase", "160MHz Phase");
   h2->SetMinimum(0);
-  for (size_t itbm=0; itbm<nTBMs; itbm++) h2->Add(tbmhists[itbm]);
+  if (fNoTokenPass) h2->Add(tbmhists[0]);
+  else for (size_t itbm=0; itbm<nTBMs; itbm++) h2->Add(tbmhists[itbm]);
 
   if (h2->GetEntries()==0) {
     LOG(logERROR) << "TBM Phase Scan Plot Empty. No working TBM Phases found!";
