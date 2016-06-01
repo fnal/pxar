@@ -716,6 +716,9 @@ saveMaskFile        checkbox(0)
 maskFileName        default
 CalDelScan          button
 xPixelAlive         button
+minrate             10
+maxrate             120
+NoiseTest           button
 Ntrig               50
 Vcal                200
 xNoiseMaps          button

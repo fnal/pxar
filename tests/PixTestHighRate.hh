@@ -21,6 +21,7 @@ public:
   void doTest();
   void doCalDelScan();
   void doXPixelAlive();
+  void NoiseTest();
   void doXNoiseMaps();
   void doRunDaq(); 
   void doRunMaskHotPixels();
@@ -37,7 +38,8 @@ private:
   int           fParTriggerDelay; 
   bool          fParFillTree;
   bool	        fParDelayTBM;
-  uint16_t      fParNtrig; 
+  uint16_t      fParNtrig;
+  double        fParMinRate, fParMaxRate;
   int           fParVcal, fParDacLo, fParDacHi, fParDacsPerStep; 
 
   std::string   fParMaskFileName; 
@@ -52,8 +54,9 @@ private:
   int     fParTrimHotPixelThr;
 
   bool          fDaq_loop;
-  
+
   std::vector<TH2D*> fHitMap;
+  std::vector<TH2D*> fHotPixelHists;
   
   ClassDef(PixTestHighRate, 1)
 

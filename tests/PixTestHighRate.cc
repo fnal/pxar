@@ -1,4 +1,3 @@
-
 #include <stdlib.h>     /* atof, atoi,itoa */
 #include <algorithm>    // std::find
 #include <iostream>
@@ -7,6 +6,7 @@
 #include "PixTestHighRate.hh"
 #include "log.h"
 #include "TStopwatch.h"
+#include "helper.h"
 #include <TStyle.h>
 
 #include "PixUtil.hh"
@@ -23,7 +23,7 @@ ClassImp(PixTestHighRate)
 // ----------------------------------------------------------------------
 PixTestHighRate::PixTestHighRate(PixSetup *a, std::string name) : PixTest(a, name),
   fParTriggerFrequency(1), fParRunSeconds(1), fParTriggerDelay(20),
-  fParFillTree(false), fParDelayTBM(false), fParNtrig(5), fParVcal(200), 
+  fParFillTree(false), fParDelayTBM(false), fParNtrig(5), fParMinRate(10.0), fParMaxRate(100.0), fParVcal(200), 
   fParDacLo(0), fParDacHi(100), fParDacsPerStep(20),
   fParMaskFileName("default"), fParSaveMaskedPixels(0)   {
   PixTest::init();
@@ -91,6 +91,14 @@ bool PixTestHighRate::setParameter(string parName, string sval) {
       if (!parName.compare("ntrig")) {
 	fParNtrig = static_cast<uint16_t>(atoi(sval.c_str()));
 	setToolTips();
+      }
+      if (!parName.compare("minrate")) {
+        fParMinRate = stod(sval);
+        setToolTips();
+      }
+      if (!parName.compare("maxrate")) {
+        fParMaxRate = stod(sval);
+        setToolTips();
       }
       if (!parName.compare("vcal")) {
 	fParVcal = atoi(sval.c_str());
@@ -172,6 +180,11 @@ void PixTestHighRate::runCommand(std::string command) {
 
   if (!command.compare("xpixelalive")) {
     doXPixelAlive();
+    return;
+  }
+
+  if (!command.compare("noisetest")) {
+    NoiseTest();
     return;
   }
 
@@ -589,6 +602,281 @@ void PixTestHighRate::doXPixelAlive() {
   finalCleanup();
 }
 
+// ----------------------------------------------------------------------
+void PixTestHighRate::NoiseTest() {
+
+  banner(Form("PixTestHighRate::NoiseTest() ntrig = %d, vcal = %d", fParNtrig, fParVcal));
+  gStyle->SetPalette(1);
+
+
+  // -- cache triggerdelay
+  vector<pair<string, uint8_t> > oldDelays = fPixSetup->getConfigParameters()->getTbSigDelays();
+  bool foundIt(false);
+  for (unsigned int i = 0; i < oldDelays.size(); ++i) {
+    if (oldDelays[i].first == "triggerdelay") {
+      foundIt = true;
+    }
+    LOG(logDEBUG) << " old set: " << oldDelays[i].first << ": " << (int)oldDelays[i].second;
+  }
+
+  vector<pair<string, uint8_t> > delays = fPixSetup->getConfigParameters()->getTbSigDelays();
+  if (!foundIt) {
+    delays.push_back(make_pair("triggerdelay", fParTriggerDelay));
+    oldDelays.push_back(make_pair("triggerdelay", 0));
+  } else {
+    for (unsigned int i = 0; i < delays.size(); ++i) {
+      if (delays[i].first == "triggerdelay") {
+        delays[i].second = fParTriggerDelay;
+      }
+    }
+  }
+
+  for (unsigned int i = 0; i < delays.size(); ++i) {
+    LOG(logDEBUG) << " setting: " << delays[i].first << ": " << (int)delays[i].second;
+  }
+  fApi->setTestboardDelays(delays);
+
+
+  fDirectory->cd();
+  PixTest::update();
+
+  fApi->setDAC("vcal", fParVcal);
+
+  fApi->_dut->testAllPixels(true);
+  fApi->_dut->maskAllPixels(false);
+  int nRocs = fApi->_dut->getNRocs();
+  if (fHotPixels.size()==0) {
+    for (int iroc = 0; iroc < nRocs; ++iroc) {
+      vector<pair<int, int> > hot;
+      fHotPixels.push_back(hot);
+    }
+  }
+
+  TH2D *maskhist;
+  for (int iroc = 0; iroc < nRocs; ++iroc) {
+    maskhist = bookTH2D(Form("Masked_Pixel_Thresholds_C%d", getIdFromIdx(iroc)),  Form("Masked_Pixel_Thresholds_C%d", getIdFromIdx(iroc)), 52, 0, 52, 80, 0, 80);
+    fHotPixelHists.push_back(maskhist);
+    fHistOptions.insert(make_pair(fHotPixelHists[iroc], "colz"));
+  }
+
+  vector<vector<pair<int, int> > > vmask =  fPixSetup->getConfigParameters()->getMaskedPixels();
+  for (unsigned int i = 0; i < vmask.size(); ++i) {
+    vector<pair<int, int> > mask = vmask[i];
+    for (unsigned int ipix = 0; ipix < mask.size(); ++ipix) {
+      fHotPixels[i].push_back(make_pair(mask[ipix].first,mask[ipix].second));
+    }
+  }
+  for (unsigned int i = 0; i < fHotPixels.size(); ++i) {
+    vector<pair<int, int> > hot = fHotPixels[i];
+    for (unsigned int ipix = 0; ipix < hot.size(); ++ipix) {
+      LOG(logINFO) << "ROC " << getIdFromIdx(i) << " masking hot pixel " << hot[ipix].first << "/" << hot[ipix].second;
+      fApi->_dut->maskPixel(hot[ipix].first, hot[ipix].second, true, getIdFromIdx(i));
+    }
+  }
+
+  // -- pattern generator setup without resets
+  resetROC();
+  fPg_setup.clear();
+  vector<pair<string, uint8_t> > pgtmp = fPixSetup->getConfigParameters()->getTbPgSettings();
+  for (unsigned i = 0; i < pgtmp.size(); ++i) {
+    if (string::npos != pgtmp[i].first.find("resetroc")) continue;
+    if (string::npos != pgtmp[i].first.find("resettbm")) continue;
+    fPg_setup.push_back(pgtmp[i]);
+  }
+  //for (unsigned int i = 0; i < fPg_setup.size(); ++i) LOG(logDEBUG) << fPg_setup[i].first << ": " << (int)fPg_setup[i].second << endl;
+
+  fApi->setPatternGenerator(fPg_setup);
+  vector<uint8_t> vthrcomplist;
+  for (int iroc = 0; iroc < nRocs; ++iroc) vthrcomplist.push_back(fApi->_dut->getDAC(iroc, "vthrcomp"));
+
+  bool doTest = true;
+  double sensorArea = 0.015 * 0.010 * 54 * 81; // in cm^2, accounting for larger edge pixels (J. Hoss 2014/10/21)
+  int numTrigs = fParNtrig * 4160;
+  //  pair<vector<TH2D*>,vector<TH2D*> > tests = xEfficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
+  //   vector<TH2D*> test2 = tests.first;
+  //   vector<TH2D*> test3 = tests.second;
+  vector<TH2D*> test2;
+  vector<TH2D*> test3;
+  vector<int> deadPixel(nRocs, 0);
+  vector<int> probPixel(nRocs, 0);
+  vector<int> xHits(nRocs,0);
+  vector<int> fidHits(nRocs,0);
+  vector<int> allHits(nRocs,0);
+  vector<int> fidPixels(nRocs,0);
+  vector<int> MaskThreshold(nRocs,2000);
+  vector<int> justwait(nRocs,0);
+  vector<bool> ROCDone(nRocs,0);
+  TLogLevel UserReportingLevel = Log::ReportingLevel();
+
+  vector<TH1D*> EffHists;
+  vector<TH1D*> FidEffHists;
+  TH1D* h1;
+  for (int iroc = 0; iroc < nRocs; ++iroc) {
+    h1 = bookTH1D(Form("HR_Overall_Efficiency_C%d", getIdFromIdx(iroc)),  Form("HR_Overall_Efficiency_C%d", getIdFromIdx(iroc)),  201, 0., 1.005);
+    EffHists.push_back(h1);
+    h1 = bookTH1D(Form("HR_Fiducial_Efficiency_C%d", getIdFromIdx(iroc)),  Form("HR_Fiducial_Efficiency_C%d", getIdFromIdx(iroc)),  201, 0., 1.005);
+    FidEffHists.push_back(h1);
+  }
+  
+  int counter = 0;
+  while (doTest) {
+    saveDacs();
+    doTest = false;
+    string rates = "";
+ 
+    for (int iroc = 0; iroc < nRocs; ++iroc) {
+      deadPixel[iroc] = 0;
+      probPixel[iroc] = 0;
+      xHits[iroc] = 0;
+      fidHits[iroc] = 0;
+      allHits[iroc] = 0;
+      fidPixels[iroc] = 0;
+    }
+
+    // Log::ReportingLevel() = Log::FromString("QUIET");
+    // test2 = efficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
+    // test3 = getXrayMaps();
+    Log::ReportingLevel() = UserReportingLevel;
+    test2 = efficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
+    test3 = getXrayMaps();
+    while (test2[0]->GetEntries()==0) {
+      test2 = efficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
+      test3 = getXrayMaps();
+    }
+
+    for (unsigned int i = 0; i < test2.size(); ++i) {
+      for (int iy = 0; iy < test2[i]->GetNbinsY(); ++iy) {
+        for (int ix = 0; ix < test2[i]->GetNbinsX(); ++ix) {
+          allHits[i] += static_cast<int>(test2[i]->GetBinContent(ix+1, iy+1));
+          EffHists[i]->Fill(test2[i]->GetBinContent(ix+1, iy+1)/fParNtrig);
+          if ((ix > 0) && (ix < 51) && (iy < 79) && (test2[i]->GetBinContent(ix+1, iy+1) > 0)) {
+            fidHits[i] += static_cast<int>(test2[i]->GetBinContent(ix+1, iy+1));
+            ++fidPixels[i];
+            FidEffHists[i]->Fill(test2[i]->GetBinContent(ix+1, iy+1)/fParNtrig);
+          }
+          // -- count dead pixels
+          if (test2[i]->GetBinContent(ix+1, iy+1) < fParNtrig) {
+            ++probPixel[i];
+            if (test2[i]->GetBinContent(ix+1, iy+1) < 1) {
+              ++deadPixel[i];
+            }
+          }
+          // -- Count X-ray hits detected
+          if (test3[i]->GetBinContent(ix+1,iy+1) > MaskThreshold[i]) {
+            fApi->_dut->maskPixel(ix, iy, true, getIdFromIdx(i));
+            fHotPixelHists[i]->SetBinContent(ix+1,iy+1,test3[i]->GetBinContent(ix+1,iy+1));
+          } else {
+            xHits[i] += static_cast<int> (test3[i]->GetBinContent(ix+1,iy+1));
+          }
+        }
+      }
+      double rate = xHits[i]/static_cast<double>(numTrigs)/25./sensorArea*1000;
+      //LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i];
+      rates += Form(" %.1f", rate);
+      if (rate >= fParMinRate) {
+        if (rate > fParMaxRate) {
+          justwait[i]++;
+          doTest = true;
+          if (justwait[i]>2) {
+            justwait[i]=1;
+            ROCDone[i]=true;
+            int step = floor(rate/fParMaxRate)*100;
+            LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]-step;
+            MaskThreshold[i]-=step;
+          } else {
+            LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Wait";
+          }
+        } else {
+          LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Good!";
+          doTest = doTest | false;
+        }
+      } else if (rate < fParMinRate && MaskThreshold[i]>1800) {
+        LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << "->" << (int) vthrcomplist[i]+1;
+        doTest = true;
+        vthrcomplist[i]++;
+        fApi->setDAC("vthrcomp", vthrcomplist[i], i);
+      }  else if (rate < fParMinRate && ROCDone[i]) {
+        LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]+25;
+        doTest = true;
+        MaskThreshold[i]+=25;
+        for (int iy = 0; iy < fHotPixelHists[i]->GetNbinsY(); ++iy) {
+          for (int ix = 0; ix < fHotPixelHists[i]->GetNbinsX(); ++ix) {
+            if (fHotPixelHists[i]->GetBinContent(ix+1,iy+1)<=MaskThreshold[i]) fApi->_dut->maskPixel(ix, iy, false, getIdFromIdx(i));
+          }
+        }
+      }
+    }
+    counter++;
+    if (!doTest) {
+      for (int iroc = 0; iroc < nRocs; ++iroc) {
+        fHistOptions.insert(make_pair(test2[iroc], "colz"));
+        fHistOptions.insert(make_pair(test3[iroc], "colz"));
+      }
+    }
+    banner(Form("Completed Loop %d: %s",counter,rates.c_str()));
+  }
+  saveDacs();
+  for (int iroc = 0; iroc < nRocs; ++iroc) {
+    for (int iy = 0; iy < fHotPixelHists[iroc]->GetNbinsY(); ++iy) {
+      for (int ix = 0; ix < fHotPixelHists[iroc]->GetNbinsX(); ++ix) {
+        if (fHotPixelHists[iroc]->GetBinContent(ix+1,iy+1)>MaskThreshold[iroc]) fHotPixels[iroc].push_back(make_pair(ix,iy));
+      }
+    }
+  }
+  if (fParMaskFileName == "default") {
+    fPixSetup->getConfigParameters()->writeMaskFile(fHotPixels);
+  } else {
+    fPixSetup->getConfigParameters()->writeMaskFile(fHotPixels, fParMaskFileName);
+  }
+  cacheDacs();
+
+  copy(EffHists.begin(), EffHists.end(), back_inserter(fHistList));
+  copy(FidEffHists.begin(), FidEffHists.end(), back_inserter(fHistList));
+  copy(test2.begin(), test2.end(), back_inserter(fHistList));
+  copy(test3.begin(), test3.end(), back_inserter(fHistList));
+  copy(fHotPixelHists.begin(), fHotPixelHists.end(), back_inserter(fHistList));
+  TH2D *h = (TH2D*)(fHistList.back());
+  h->Draw(getHistOption(h).c_str());
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), h);
+  PixTest::update();
+
+  // -- summary printout
+  //  int nrocs = fApi->_dut->getNEnabledRocs();
+  string deadPixelString, probPixelString, xHitsString, numTrigsString,
+    fidCalHitsString, allCalHitsString,
+    fidCalEfficiencyString, allCalEfficiencyString,
+    xRayRateString;
+  for (unsigned int i = 0; i < probPixel.size(); ++i) {
+    probPixelString += Form(" %4d", probPixel[i]);
+    deadPixelString += Form(" %4d", deadPixel[i]);
+    xHitsString     += Form(" %4d", xHits[i]);
+    allCalHitsString += Form(" %4d", allHits[i]);
+    fidCalHitsString += Form(" %4d", fidHits[i]);
+    int numTrigs = fParNtrig * 4160;
+    numTrigsString += Form(" %4d", numTrigs );
+    fidCalEfficiencyString += Form(" %.1f", fidHits[i]/static_cast<double>(fidPixels[i]*fParNtrig)*100);
+    allCalEfficiencyString += Form(" %.1f", allHits[i]/static_cast<double>(numTrigs)*100);
+    xRayRateString += Form(" %.1f", xHits[i]/static_cast<double>(numTrigs)/25./sensorArea*1000.);
+  }
+
+  LOG(logINFO) << "number of dead pixels (per ROC): " << deadPixelString;
+  LOG(logINFO) << "number of red-efficiency pixels: " << probPixelString;
+  LOG(logINFO) << "number of X-ray hits detected:   " << xHitsString;
+  LOG(logINFO) << "number of triggers sent (total per ROC): " << numTrigsString;
+  LOG(logINFO) << "number of Vcal hits detected: " << allCalHitsString;
+  LOG(logINFO) << "Vcal hit fiducial efficiency (%): " << fidCalEfficiencyString;
+  LOG(logINFO) << "Vcal hit overall efficiency (%): " << allCalEfficiencyString;
+  LOG(logINFO) << "X-ray hit rate [MHz/cm2]: " <<  xRayRateString;
+  LOG(logINFO) << "PixTestHighRate::NoiseTest() done";
+
+  // -- reset sig delays
+  fApi->setTestboardDelays(oldDelays);
+  for (unsigned int i = 0; i < oldDelays.size(); ++i) {
+    LOG(logDEBUG) << " resetting: " << oldDelays[i].first << ": " << (int)oldDelays[i].second;
+  }
+
+  finalCleanup();
+}
 
 // ----------------------------------------------------------------------
 void PixTestHighRate::doXNoiseMaps() {
