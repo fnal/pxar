@@ -195,7 +195,7 @@ int PixTest::pixelThreshold(string dac, int ntrig, int dacmin, int dacmax) {
     } catch(pxarException &/*e*/) {
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
 
   int val(0); 
@@ -337,7 +337,7 @@ vector<TH2D*> PixTest::phMaps(string name, uint16_t ntrig, uint16_t FLAGS) {
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
   LOG(logDEBUG) << " eff result size = " << results.size(); 
 
@@ -402,7 +402,7 @@ vector<TH2D*> PixTest::efficiencyMaps(string name, uint16_t ntrig, uint16_t FLAG
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
   LOG(logDEBUG) << " eff result size = " << results.size(); 
 
@@ -514,7 +514,7 @@ vector<TH1*> PixTest::thrMaps(string dac, string name, uint8_t daclo, uint8_t da
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
 
   LOG(logDEBUG) << "finished threshold map for dac = " << dac << " results size = " << results.size(); 
@@ -1170,7 +1170,7 @@ vector<int> PixTest::getMaximumVthrComp(int ntrig, double frac, int reserve) {
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
 
 
@@ -1447,7 +1447,7 @@ void PixTest::preScan(string dac, std::vector<shist256*> maps, int &dacmin, int 
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
 
   if (666667 == fNDaqErrors) {
@@ -1600,7 +1600,7 @@ void PixTest::dacScan(string dac, int ntrig, int dacmin, int dacmax, std::vector
       fNDaqErrors = 666667;
       ++cnt;
     }
-    done = (cnt>5) || done;
+    done = (cnt>1) || done;
   }
   
   int idx(0); 
