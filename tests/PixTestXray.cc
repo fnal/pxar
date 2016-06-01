@@ -245,6 +245,20 @@ void PixTestXray::doPhRun() {
   // -- unmask entire chip and then mask hot pixels
   fApi->_dut->testAllPixels(false);
   fApi->_dut->maskAllPixels(false);
+  int nRocs = fApi->_dut->getNRocs();
+  if (fHotPixels.size()==0) {
+    for (int iroc = 0; iroc < nRocs; ++iroc) {
+      vector<pair<int, int> > hot;
+      fHotPixels.push_back(hot);
+    }
+  }
+  vector<vector<pair<int, int> > > vmask =  fPixSetup->getConfigParameters()->getMaskedPixels();
+  for (unsigned int i = 0; i < vmask.size(); ++i) {
+    vector<pair<int, int> > mask = vmask[i];
+    for (unsigned int ipix = 0; ipix < mask.size(); ++ipix) {
+      fHotPixels[i].push_back(make_pair(mask[ipix].first,mask[ipix].second));
+    }
+  }
   for (unsigned int i = 0; i < fHotPixels.size(); ++i) {
     vector<pair<int, int> > hot = fHotPixels[i]; 
     for (unsigned int ipix = 0; ipix < hot.size(); ++ipix) {
