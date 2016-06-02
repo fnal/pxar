@@ -2484,22 +2484,23 @@ bool PixTest::checkReadBackBits(uint16_t period) {
   std::vector<std::vector<uint16_t> > ReadBackBits;
 
   std::vector<uint8_t> rocids = fApi->_dut->getRocI2Caddr();
+  std::vector<uint8_t> ROCList;
   size_t nTBMs = fApi->_dut->getNTbms();
   int nTokenChains = 0;
   std::vector<tbmConfig> enabledTBMs = fApi->_dut->getEnabledTbms();
   for(std::vector<tbmConfig>::iterator enabledTBM = enabledTBMs.begin(); enabledTBM != enabledTBMs.end(); enabledTBM++) nTokenChains += enabledTBM->tokenchains.size();
 
   for (size_t itbm=0; itbm < nTBMs; itbm++) {
-    if ((GetTBMSetting("base0", itbm) & 64) == 64) {
-      for (int iroc=0; iroc < (int) rocids.size(); iroc++) {
-        if (rocids[iroc] >= 16/nTokenChains*itbm && rocids[iroc] < 16/nTokenChains*(itbm+1)) {
-          rocids.erase(rocids.begin()+iroc);
-          iroc--;
+    if ((GetTBMSetting("base0", itbm) & 64) != 64) {
+      for (size_t iroc=0; iroc < rocids.size(); iroc++) {
+        uint8_t ROCIndex = rocids[iroc];
+        if (int(ROCIndex) >= 16/nTokenChains*int(itbm) && int(ROCIndex) < 16/nTokenChains*(int(itbm)+1)) {
+          ROCList.push_back(ROCIndex);
         }
       }
     }
   }
-  
+
   fApi->daqTrigger(32, period);
   try { daqEv = fApi->daqGetEventBuffer(); }
   catch(pxar::DataNoEvent &) {}
@@ -2509,10 +2510,11 @@ bool PixTest::checkReadBackBits(uint16_t period) {
   int NErrors = results.errors_tbm_header() + results.errors_tbm_trailer() + results.errors_roc_missing();
   if (NEvents!=32 || NErrors!=0) return false;
 
+  if (ROCList.size() != ReadBackBits.size()) return false;
   for (size_t irb=0; irb<ReadBackBits.size(); irb++) {
     for (size_t jrb=0; jrb<ReadBackBits[irb].size(); jrb++) {
       if (ReadBackBits[irb][jrb]==65535) ReadBackGood = false;
-      if (ReadBackBits[irb][jrb]>>12 != rocids[irb]) ReadBackGood = false;
+      if (ReadBackBits[irb][jrb]>>12 != ROCList[irb]) ReadBackGood = false;
     }
   }
   return ReadBackGood;
