@@ -1,6 +1,5 @@
 #include <stdlib.h>     /* atof, atoi,itoa */
 #include <algorithm>    // std::find
-#include <string>     // std::string, std::stod
 #include <iostream>
 #include <fstream>
 
@@ -47,7 +46,7 @@ PixTestHighRate::PixTestHighRate() : PixTest() {
 // ----------------------------------------------------------------------
 bool PixTestHighRate::setParameter(string parName, string sval) {
   bool found(false);
-  string str1, str2; 
+  string str1, str2;
   string::size_type s1;
   int pixc, pixr; 
   std::transform(parName.begin(), parName.end(), parName.begin(), ::tolower);
@@ -94,11 +93,11 @@ bool PixTestHighRate::setParameter(string parName, string sval) {
 	setToolTips();
       }
       if (!parName.compare("minrate")) {
-        fParMinRate = stod(sval);
+        fParMinRate = strtod(sval.c_str(),NULL);
         setToolTips();
       }
       if (!parName.compare("maxrate")) {
-        fParMaxRate = stod(sval);
+        fParMaxRate = strtod(sval.c_str(),NULL);
         setToolTips();
       }
       if (!parName.compare("vcal")) {
