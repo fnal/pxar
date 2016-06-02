@@ -1,5 +1,6 @@
 #include <stdlib.h>     /* atof, atoi,itoa */
 #include <algorithm>    // std::find
+#include <string>     // std::string, std::stod
 #include <iostream>
 #include <fstream>
 
@@ -703,10 +704,9 @@ void PixTestHighRate::NoiseTest() {
   vector<int> fidHits(nRocs,0);
   vector<int> allHits(nRocs,0);
   vector<int> fidPixels(nRocs,0);
-  vector<int> MaskThreshold(nRocs,2000);
+  vector<int> MaskThreshold(nRocs,1000);
   vector<int> justwait(nRocs,0);
   vector<bool> ROCDone(nRocs,0);
-  TLogLevel UserReportingLevel = Log::ReportingLevel();
 
   vector<TH1D*> EffHists;
   vector<TH1D*> FidEffHists;
@@ -733,10 +733,6 @@ void PixTestHighRate::NoiseTest() {
       fidPixels[iroc] = 0;
     }
 
-    // Log::ReportingLevel() = Log::FromString("QUIET");
-    // test2 = efficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
-    // test3 = getXrayMaps();
-    Log::ReportingLevel() = UserReportingLevel;
     test2 = efficiencyMaps("highRate", fParNtrig, FLAG_CHECK_ORDER | FLAG_FORCE_UNMASKED);
     test3 = getXrayMaps();
     while (test2[0]->GetEntries()==0) {
@@ -790,12 +786,12 @@ void PixTestHighRate::NoiseTest() {
           LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Good!";
           doTest = doTest | false;
         }
-      } else if (rate < fParMinRate && MaskThreshold[i]>1800) {
+      } else if (rate < fParMinRate && MaskThreshold[i]==1000) {
         LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << "->" << (int) vthrcomplist[i]+1;
         doTest = true;
         vthrcomplist[i]++;
         fApi->setDAC("vthrcomp", vthrcomplist[i], i);
-      }  else if (rate < fParMinRate && ROCDone[i]) {
+      }  else if (rate < fParMinRate && MaskThreshold[i]<1000) {
         LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]+25;
         doTest = true;
         MaskThreshold[i]+=25;
