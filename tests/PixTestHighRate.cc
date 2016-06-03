@@ -705,7 +705,6 @@ void PixTestHighRate::NoiseTest() {
   vector<int> fidPixels(nRocs,0);
   vector<int> MaskThreshold(nRocs,1000);
   vector<int> justwait(nRocs,0);
-  vector<bool> ROCDone(nRocs,0);
 
   vector<TH1D*> EffHists;
   vector<TH1D*> FidEffHists;
@@ -766,7 +765,6 @@ void PixTestHighRate::NoiseTest() {
         }
       }
       double rate = xHits[i]/static_cast<double>(numTrigs)/25./sensorArea*1000;
-      //LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i];
       rates += Form(" %.1f", rate);
       if (rate >= fParMinRate) {
         if (rate > fParMaxRate) {
@@ -774,8 +772,7 @@ void PixTestHighRate::NoiseTest() {
           doTest = true;
           if (justwait[i]>2) {
             justwait[i]=1;
-            ROCDone[i]=true;
-            int step = floor(rate/fParMaxRate)*100;
+            int step = ceil((rate-fParMaxRate)/10)*10;
             LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]-step;
             MaskThreshold[i]-=step;
           } else {
@@ -783,6 +780,7 @@ void PixTestHighRate::NoiseTest() {
           }
         } else {
           LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Good!";
+          justwait[i]=0;
           doTest = doTest | false;
         }
       } else if (rate < fParMinRate && MaskThreshold[i]==1000) {
@@ -791,9 +789,9 @@ void PixTestHighRate::NoiseTest() {
         vthrcomplist[i]++;
         fApi->setDAC("vthrcomp", vthrcomplist[i], i);
       }  else if (rate < fParMinRate && MaskThreshold[i]<1000) {
-        LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]+25;
+        LOG(logDEBUG) << "ROC " << i << " Rate: " << Form("%.1f MHz ", rate) << "VThrComp: " << (int) vthrcomplist[i] << " Mask: " << MaskThreshold[i] << "->" << MaskThreshold[i]+10;
         doTest = true;
-        MaskThreshold[i]+=25;
+        MaskThreshold[i]+=10;
         for (int iy = 0; iy < fHotPixelHists[i]->GetNbinsY(); ++iy) {
           for (int ix = 0; ix < fHotPixelHists[i]->GetNbinsX(); ++ix) {
             if (fHotPixelHists[i]->GetBinContent(ix+1,iy+1)<=MaskThreshold[i]) fApi->_dut->maskPixel(ix, iy, false, getIdFromIdx(i));

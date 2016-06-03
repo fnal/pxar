@@ -758,6 +758,7 @@ pair <int, int> PixTestTiming::getGoodRegion(TH2D* hist, int hits) {
   if (hist->GetEntries()==0) return make_pair(0,0);
 
   int MaxGoodRegionSize=0;
+  int MaxGoodRegionArea=0;
   int GoodROCDelay=0;
   for (int startbinx=1; startbinx<=hist->GetNbinsX(); startbinx++) {
     for (int startbiny=1; startbiny<=hist->GetNbinsY(); startbiny++) {
@@ -772,12 +773,14 @@ pair <int, int> PixTestTiming::getGoodRegion(TH2D* hist, int hits) {
               if (int(hist->GetBinContent(checkbinx,checkbiny))!=hits) regiongood=false;
             }
           }
+          int GoodRegionArea=(xsize+1)*(ysize+1);
           int GoodRegionSize=0;
           if (xsize >= ysize) GoodRegionSize=ysize+1;
           else if (xsize < ysize) GoodRegionSize=xsize+1;
-          if (regiongood && GoodRegionSize>MaxGoodRegionSize) {
+          if (regiongood && (GoodRegionSize>MaxGoodRegionSize || (GoodRegionSize==MaxGoodRegionSize && GoodRegionArea>MaxGoodRegionArea))) {
             if (xsize >= ysize) MaxGoodRegionSize=ysize+1;
             else if (xsize < ysize) MaxGoodRegionSize=xsize+1;
+            MaxGoodRegionArea=GoodRegionArea;
             GoodROCDelay = (startbinx-1+xsize/2)%8 | (startbiny-1+ysize/2)%8<<3;
           }
         }
