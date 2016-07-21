@@ -357,7 +357,7 @@ void PixTestPretest::setVana() {
     } // iter
 
     rocIana[roc] = ia-i015; // more or less identical for all ROCS?!
-    if (vana==255 || vana<40) vana = 78;
+    if (vana==255 || vana<60) vana = 78;
     vanaStart[roc] = vana; // remember best
     fApi->setDAC( "vana", 0, roc ); // switch off for next ROC
 
