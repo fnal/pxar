@@ -2513,6 +2513,7 @@ bool PixTest::checkReadBackBits(uint16_t period) {
   if (ROCList.size() != ReadBackBits.size()) return false;
   for (size_t irb=0; irb<ReadBackBits.size(); irb++) {
     for (size_t jrb=0; jrb<ReadBackBits[irb].size(); jrb++) {
+      //LOG(logDEBUG) << "ReadBackBits[" << irb << "][" << jrb << "]: " << ReadBackBits[irb][jrb] << " " << (ReadBackBits[irb][jrb]>>12);
       if (ReadBackBits[irb][jrb]==65535) ReadBackGood = false;
       if (ReadBackBits[irb][jrb]>>12 != ROCList[irb]) ReadBackGood = false;
     }
