@@ -85,8 +85,8 @@ void PixTestFPIXROCTest::doTest() {
   bigBanner(Form("PixTestFPIXROCTest::doTest()"));
 
   vector<string> suite;
-  suite.push_back("Pretest");
   suite.push_back("setup");
+  suite.push_back("Pretest");
   suite.push_back("alive");
   suite.push_back("trim");
   suite.push_back("scurves");
