@@ -311,12 +311,10 @@ void PixTestBB3Map::doTest() {
     bbString += Form(" %4d", nBadBumps);
 
   }
-  if (rescaledThrdists[15]) {
-    rescaledThrdists[15]->Draw();
-    fDisplayedHist = find(fHistList.begin(), fHistList.end(), rescaledThrdists[15]);
-  }
-  PixTest::update();
 
+  rescaledThrdists.back()->Draw();
+  fDisplayedHist = find(fHistList.begin(), fHistList.end(), rescaledThrdists.back());
+  PixTest::update();
 
   int seconds = t.RealTime();
   LOG(logINFO) << "PixTestBB3Map::doTest() done"
