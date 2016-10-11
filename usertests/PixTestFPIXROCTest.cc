@@ -93,6 +93,7 @@ void PixTestFPIXROCTest::doTest() {
   suite.push_back("phoptimization"); 
   suite.push_back("gainpedestal"); 
   suite.push_back("bb3"); 
+  suite.push_back("readback");
 
   PixTest *t(0); 
 
