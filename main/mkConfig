@@ -629,6 +629,7 @@ getCalibratedVbg    button
 useCalVd            checkbox(1)
 useCalVa            checkbox(0)
 setVana             button
+quickTest           button
 
 -- IV
 port                /dev/FIXME

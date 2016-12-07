@@ -148,6 +148,10 @@ void PixTestReadback::runCommand(std::string command) {
     setVana();
     return;
   }
+  if(!command.compare("quicktest")){
+    quickTest();
+    return;
+  }
   else{
     LOG(logINFO) << "Command " << command << " not implemented.";
   }
@@ -289,6 +293,18 @@ void PixTestReadback::FinalCleaning() {
   pgToDefault();
   //clean local variables:
   fPg_setup.clear();
+}
+
+template <class type> string PixTestReadback::vectostr(vector<type> input, int precision, string spacer) {
+
+  stringstream output;
+  for (unsigned int i = 0; i < input.size(); i++) {
+    if (precision > 0) output << setprecision(precision) << fixed << float(input[i]);
+    else output << int(input[i]);
+    output << spacer;
+  }
+  return output.str();
+
 }
 
 // ----------------------------------------------------------------------
@@ -792,6 +808,115 @@ void PixTestReadback::readbackVbg(){
   restoreDacs();
   restorePowerSettings();
   FinalCleaning();
+}
+
+void PixTestReadback::quickTest(){
+
+  // Start test timer
+  timer t;
+
+  fDirectory->cd();
+  PixTest::update();
+  bigBanner("PixTestReadback::quickTest()");
+
+  prepareDAQ();
+  cacheDacs();
+  cachePowerSettings();
+  fApi->_dut->testAllPixels(false);
+  fApi->_dut->maskAllPixels(true);
+
+  vector<pair<string,double > > PowerSettings;
+  PowerSettings.push_back(make_pair<string,double>("vd",2.8));
+  PowerSettings.push_back(make_pair<string,double>("va",1.9));
+  PowerSettings.push_back(make_pair<string,double>("id",1.1));
+  PowerSettings.push_back(make_pair<string,double>("ia",1.19));
+  fApi->setTestboardPower(PowerSettings);
+
+  //float CableResistance = 0.21; //Per line short copper flex cable saver resistance
+  float CableResistance = 0.97; //Per line long aluminium flex cable resistance
+  float Vbg = 1.235; //Magic number from Will for the bandgap voltage
+
+  vector<uint8_t> rocIds = fApi->_dut->getEnabledRocIDs();
+  LOG(logDEBUG) << "Number of enabled rocs: " << (int) rocIds.size();
+
+  vector<uint8_t> rb_VD;
+  vector<uint8_t> rb_VA;
+  vector<uint8_t> rb_Vbg;
+
+  LOG(logDEBUG) << "Measuring Currents and voltages.";
+  float IATB = fApi->getTBia();
+  float IDTB = fApi->getTBid();
+  float VDTB = fApi->getTBvd();
+  float VATB = fApi->getTBva();
+  LOG(logDEBUG) << "Checking Readback Bits";
+  rb_VD = daqReadback("vd", 2.8, 8); //readback DAC set to 8 (i.e. Vd)
+  rb_VA = daqReadback("va", 1.9, 9); //readback DAC set to 9 (i.e. Va)
+  rb_Vbg = daqReadback("vd", 2.8, 11); //readback DAC set to 11 (i.e. Vbg)
+
+  if (rb_VD.size() != rocIds.size() or rb_VA.size() != rocIds.size() or rb_Vbg.size() != rocIds.size()) {
+    LOG(logDEBUG) << "Number of ROCs: " << rocIds.size();
+    LOG(logDEBUG) << "Size of VD vector: " << rb_VD.size();
+    LOG(logDEBUG) << "Size of VA vector: " << rb_VA.size();
+    LOG(logDEBUG) << "Size of Vbg vector: " << rb_Vbg.size();
+    LOG(logERROR) << "Size of readback vector does not match the number of ROCs. Aborting Test";
+    return;
+  }
+
+  vector<float> VD;
+  vector<float> VA;
+  float VD_avg = 0;
+  float VA_avg = 0;
+  for(unsigned int iroc = 0; iroc < rocIds.size(); iroc++){
+    VD.push_back(float(rb_VD[getIdFromIdx(iroc)]) * 2*Vbg/float(rb_Vbg[getIdFromIdx(iroc)]));
+    VA.push_back(float(rb_VA[getIdFromIdx(iroc)]) * 2*Vbg/float(rb_Vbg[getIdFromIdx(iroc)]));
+    VD_avg += VD[iroc];
+    VA_avg += VA[iroc];
+  }
+  VD_avg /= rocIds.size();
+  VA_avg /= rocIds.size();
+
+  float VD_drop = IDTB*CableResistance/2; //Ditigal voltage drop across long aluminium flex cable
+  float VA_drop = IATB*CableResistance/2; //Analog voltage drop across long aluminium flex cable
+  float VG_drop = (IDTB+IATB)*CableResistance/6; //Voltage difference between grounds between the adapter card and module
+  float VD_mod = VDTB - VD_drop - VG_drop; //Estimated digital voltage on module
+  float VA_mod = VATB - VA_drop - VG_drop; //Estimated analog voltage on module
+  float VD_diff = VD_avg - VD_mod;
+  float VA_diff = VA_avg - VA_mod;
+
+  LOG(logINFO) << "PixTestReadback::quickTest Summary";
+  LOG(logINFO) << "DTB Digital Voltage (V): " << VDTB;
+  LOG(logINFO) << "DTB Analog Voltage (V):  " << VATB;
+  LOG(logINFO) << "DTB Digital Current (mA): " << IDTB*1000;
+  LOG(logINFO) << "DTB Analog Current (mA):  " << IATB*1000;
+  LOG(logINFO) << "Vbg per ROC (ADC): " << vectostr(rb_Vbg);
+  LOG(logINFO) << "VD per ROC (ADC):  " << vectostr(rb_VD);
+  LOG(logINFO) << "VA per ROC (ADC):  " << vectostr(rb_VA);
+  LOG(logINFO) << "VD per ROC (V): " << vectostr(VD,3);
+  LOG(logINFO) << "VA per ROC (V): " << vectostr(VA,3);
+  LOG(logINFO) << "Average Digital Voltage on Module (V):   " << Form("%.3f", VD_avg);
+  LOG(logINFO) << "Estimated Digital Voltage on Module (V): " << Form("%.3f", VD_mod);
+  LOG(logINFO) << "Average Analog Voltage on Module (V):    " << Form("%.3f", VA_avg);
+  LOG(logINFO) << "Estimated Analog Voltage on Module (V):  " << Form("%.3f", VA_mod);
+  LOG(logINFO) << "Difference Between Average and Estimated Digital Voltage (V): " << Form("%.3f", VD_diff);
+  LOG(logINFO) << "Difference Between Average and Estimated Analog Voltage (V):  " << Form("%.3f", VA_diff);
+  if (Log::ReportingLevel() >= logDEBUG) banner("Broken Trace Table");
+  LOG(logDEBUG) << "Estimated VD with lost VD Trace:            " << Form("%.3f", VDTB - (IDTB*CableResistance + (IDTB+IATB)*(CableResistance/6)));
+  LOG(logDEBUG) << "Estimated VD with lost Ground Trace:        " << Form("%.3f", VDTB - (IDTB*CableResistance/2 + (IDTB+IATB)*(CableResistance/5)));
+  LOG(logDEBUG) << "Estimated VD with lost VD and Ground Trace: " << Form("%.3f", VDTB - (IDTB*CableResistance + (IDTB+IATB)*(CableResistance/5)));
+  LOG(logDEBUG) << "Estimated VA with lost VA Trace:            " << Form("%.3f", VATB - (IATB*CableResistance + (IDTB+IATB)*(CableResistance/6)));
+  LOG(logDEBUG) << "Estimated VA with lost Ground Trace:        " << Form("%.3f", VATB - (IATB*CableResistance/2 + (IDTB+IATB)*(CableResistance/5)));
+  LOG(logDEBUG) << "Estimated VA with lost VA and Ground Trace: " << Form("%.3f", VATB - (IATB*CableResistance + (IDTB+IATB)*(CableResistance/5)));
+
+  fDisplayedHist = fHistList.begin();
+  PixTest::update();
+
+  restoreDacs();
+  restorePowerSettings();
+  FinalCleaning();
+  dutCalibrateOff();
+
+  LOG(logINFO) << "Test took " << t << " ms.";
+  LOG(logINFO) << "PixTestReadback::quickTest() done.";
 }
 
 vector<double> PixTestReadback::getCalibratedVbg(){

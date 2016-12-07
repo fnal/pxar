@@ -41,6 +41,8 @@ public:
   void prepareDAQ();
   void PreparePG();
   void doDAQ();
+  void quickTest();
+  template <class type> std::string vectostr(std::vector<type> input, int precision = 0, std::string spacer = " ");
 
   void cachePowerSettings();
   void restorePowerSettings();
